@@ -47,6 +47,18 @@ lazy_static! {
     static ref SORT_FIELDS: Vec<&'static str> = vec!["name", "modified", "size"];
 }
 
+fn to_plaintext(mime: &str) -> String {
+    let mime = if mime.find("text") == Some(0) {
+        mime_types::mime::TEXT_PLAIN.to_string()
+    } else if mime == "application/x-sh" {
+        mime_types::mime::TEXT_PLAIN.to_string()
+    } else {
+        mime.to_string()
+    };
+
+    mime
+}
+
 fn main() {
     let matches = clap::App::new("Simple HTTP(s) Server")
         .setting(clap::AppSettings::ColoredHelp)
@@ -895,24 +907,33 @@ impl MainHandler {
                 // Set mime type
                 //let mime = mime_types::from_path(path).first_or_octet_stream();
                 let mime = if cfg!(target_os = "linux") {
-                    mime_types::from_path(path).first_or_else(|| {
-                        if let Ok(cookie) = magic::Cookie::open(magic::flags::MIME_TYPE) {
-                            if cookie.load::<&str>(&[]).is_ok() {
-                                if let Ok(val) = cookie.file(&path) {
-                                   if val == "text/plain" { 
-                                        return mime_types::mime::TEXT_PLAIN;
-                                   }
-                                }
+                    let mut mime = mime_types::mime::APPLICATION_OCTET_STREAM.to_string();
+                    if let Some(val) = mime_types::from_path(path).first() {
+                        mime = val.to_string();
+                    } else if let Ok(cookie) = magic::Cookie::open(magic::flags::MIME_TYPE) {
+                        if cookie.load::<&str>(&[]).is_ok() {
+                            if let Ok(val) = cookie.file(&path) {
+                                mime = val;
                             }
                         }
-                        mime_types::mime::APPLICATION_OCTET_STREAM
-                    })
+                    }
+                    mime
                 } else {
-                    mime_types::from_path(path).first_or_octet_stream()
+                    mime_types::from_path(path)
+                        .first_or_octet_stream()
+                        .to_string()
                 };
-                        
+
+                let mime = to_plaintext(&mime);
+
+                /*let mime = if mime.find("text") == Some(0) {*/
+                /*mime_types::mime::TEXT_PLAIN.to_string()*/
+                /*} else {*/
+                /*mime*/
+                /*};*/
+
                 resp.headers
-                    .set_raw("content-type", vec![mime.to_string().into_bytes()]);
+                    .set_raw("content-type", vec![mime.into_bytes()]);
 
                 if self.range {
                     let mut range = req.headers.get::<Range>();

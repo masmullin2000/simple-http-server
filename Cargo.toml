@@ -37,3 +37,7 @@ magic = "0.12.2"
 [features]
 default = ["tls"]
 tls = ["hyper-native-tls"]
+
+[profile.release]
+lto = true
+opt-level = "z" 
